@@ -16,6 +16,7 @@ class Spond():
         self.cookie = None
         self.groups = None
         self.events = None
+        self.person = None
 
 
 
@@ -33,6 +34,7 @@ class Spond():
 
         self.chaturl = result['url']
         self.auth = result['auth']
+        self.person = await self.getPerson(self.username)
 
     async def getGroups(self):
         """
@@ -148,7 +150,7 @@ class Spond():
             self.events = await r.json()
             return self.events
 
-    async def getEventsBetween(self, from_date, to_date, max_events=100):
+    async def getEventsBetween(self, from_date, to_date, max_events=100) -> list[dict[str,str]]:
         """
         Get events between two datetimes.
         Subject to authenticated user's access.
@@ -181,7 +183,7 @@ class Spond():
             self.events = await r.json()
             return self.events
 
-    async def getEvent(self, uid):
+    async def getEvent(self, uid) -> dict[str,str]:
         """
         Get an event by unique ID.
         Subject to authenticated user's access.
@@ -203,3 +205,39 @@ class Spond():
         for event in self.events:
             if event['id'] == uid:
                 return event
+            
+    async def acceptEvent(self, uid:str) -> dict[str,str]:
+        """
+        Accept an event by unique ID.
+        - Subject to authenticated user's access.
+        - Will check if user id has already accepted.
+        - Will check if invite is sent out before running PUT request.
+
+        Parameters
+        ----------
+        uid : str
+            UID of the event.
+
+        Returns
+        -------
+        dict
+            Details of the event
+        """
+        if not self.cookie:
+            await self.login()
+        event = await self.getEvent(uid)
+        if "inviteTime" in event.keys() and datetime.strptime(event['inviteTime'],'%Y-%m-%dT%H:%M:%SZ') > datetime.utcnow():
+            print(F"Invite time: ({event['inviteTime']}) for event: {event['heading']} is greater than now...try again later.")
+            return event
+        url = f"{self.apiurl}sponds/{uid}/responses/{self.person['id']}"
+        data = {"accepted": True}
+        headers = { 'auth': self.auth }
+        if self.person['id'] not in event["responses"]["acceptedIds"]:
+            async with self.clientsession.put(url, json=data, headers=headers) as r:
+                event = await r.json()
+                if self.person['id'] in event["responses"]["acceptedIds"]:
+                    print(f"User: {self.person['firstName']} {self.person['lastName']} is now accepted.")
+        else:
+            print(f"{self.person['firstName']} {self.person['lastName']} has already accepted")
+        return event
+
