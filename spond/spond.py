@@ -198,6 +198,8 @@ class Spond():
         dict
             Details of the event.
         """
+        if not uid:
+            raise KeyError("Missing UID")
         if not self.cookie:
             await self.login()
         if not self.events:
@@ -221,22 +223,24 @@ class Spond():
         Returns
         -------
         dict
-            Details of the event
+            Details of the event or the PUT response
         """
         if not self.cookie:
             await self.login()
         event = await self.getEvent(uid)
         if "inviteTime" in event.keys() and datetime.strptime(event['inviteTime'],'%Y-%m-%dT%H:%M:%SZ') > datetime.utcnow():
-            print(F"Invite time: ({event['inviteTime']}) for event: {event['heading']} is greater than now...try again later.")
+            print(F"Invite time: ({event['inviteTime']}) for event: ({event['heading']}) is greater than now...try again later.")
             return event
         url = f"{self.apiurl}sponds/{uid}/responses/{self.person['id']}"
         data = {"accepted": True}
         headers = { 'auth': self.auth }
         if self.person['id'] not in event["responses"]["acceptedIds"]:
             async with self.clientsession.put(url, json=data, headers=headers) as r:
-                event = await r.json()
-                if self.person['id'] in event["responses"]["acceptedIds"]:
-                    print(f"User: {self.person['firstName']} {self.person['lastName']} is now accepted.")
+                response:dict = await r.json()
+                if ("responses" in response.keys() and self.person['id'] in response["responses"]["acceptedIds"]) \
+                    or ("acceptedIds" in response.keys() and self.person['id'] in response["acceptedIds"]):
+                    print(f"User: {self.person['firstName']} {self.person['lastName']} has accepted event {response['heading'] if 'heading' in response.keys() else ''}")
+                    return response
         else:
             print(f"{self.person['firstName']} {self.person['lastName']} has already accepted")
         return event
