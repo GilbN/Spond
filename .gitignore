@@ -9,6 +9,7 @@ build/
 # Project specific
 exports/*
 config.py
+venv/
 
 
 
